@@ -143,3 +143,19 @@ body.rural {
 @media (max-width: 540px) {
   #dashboard-channels { grid-template-columns: minmax(0, 1fr) !important; }
 }
+
+#signals-channels .channel-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  background: #0d1724;
+}
+#signals-channels .has-preview .channel-meter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 0;
+  padding: 8px 10px;
+}
+#signals-channels .has-preview .capture-clock { font-size: 14px; }

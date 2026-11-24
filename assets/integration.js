@@ -56,7 +56,7 @@ channelCard=function(i){
  </div><div class="channel-meter">
   <span class="rec-state ${r&&online?'recording':''}"><span class="rec-dot"></span>${state}</span>
   <strong class="capture-clock">${r&&online?clock(r):'—'}</strong>
- </div><div class="channel-controls"><small>${pilot?(s?.preview_path?'Preview na tela Sinais':'Preview indisponível'):'Fora do piloto'}</small>
+ </div><div class="channel-controls"><small>${pilot?(s?.preview_path?'Preview local':'Preview indisponível'):'Fora do piloto'}</small>
   <div class="channel-btns">${pilot?`<button class="mini-control" data-capture="${i}" data-recording="${Boolean(r)}" ${!online||pending||!s||(!r&&!health.ffmpeg)?'disabled':''} onclick="toggleRecord(${i})" aria-label="${r?'Parar':'Gravar'} canal ${i+1}">${r?'■ STOP':'● REC'}</button>
   <button class="mini-control" onclick="channelDetails(${i})" aria-label="Configurar canal ${i+1}" ${!online?'disabled':''}>⚙</button>`:''}</div>
  </div></article>`;
@@ -146,47 +146,55 @@ function refresh(){
  })();
  return refreshing;
 }
-const previewCard = $('signals-channels').closest('.card');
-previewCard.querySelector('h2').textContent = 'Preview ao vivo';
-previewCard.querySelector('.badge').remove();
-const previewGrid = document.createElement('div');
-previewGrid.className = 'channel-grid';
-previewGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))';
-$('signals-channels').before(previewGrid);
-let previewKey;
-function renderPreviews() {
- const entries = currentPage === 'signals' && online
-  ? pilotSlots.map(slot => ({slot, source: source(slot)}))
-   .filter(entry => ['live/test', 'live/teste'].includes(entry.source?.preview_path))
-  : [];
- const key = JSON.stringify([currentPage === 'signals', entries]);
- if (previewKey === key) return;
- previewKey = key;
- previewGrid.replaceChildren();
- previewGrid.hidden = currentPage !== 'signals';
- if (!entries.length && currentPage === 'signals') {
-  const note = document.createElement('p');
-  note.textContent = 'Vincule uma fonte RTMP do MediaMTX local para abrir o preview.';
-  previewGrid.append(note);
+const signalGrid = $('signals-channels');
+signalGrid.closest('.card').querySelector('.badge').remove();
+const signalCards = [];
+
+window.renderLocalSignalCards = function () {
+ for (const [slot] of NAMES.entries()) {
+  const template = document.createElement('template');
+  template.innerHTML = channelCard(slot);
+  const nextCard = template.content.firstElementChild;
+  let card = signalCards[slot];
+  if (!card) {
+   card = nextCard;
+   signalCards[slot] = card;
+   signalGrid.append(card);
+  } else {
+   for (const selector of ['.channel-head', '.channel-meter', '.channel-controls']) {
+    const current = card.querySelector(selector);
+    const next = nextCard.querySelector(selector);
+    if (!current.isEqualNode(next)) current.replaceWith(next);
+   }
+  }
+
+  const signal = source(slot);
+  const path = signal?.preview_path;
+  const player = card.querySelector('.channel-preview');
+  const showPreview = currentPage === 'signals' && online && ['live/test', 'live/teste'].includes(path);
+  if (!showPreview || (player && player.dataset.path !== path)) player?.remove();
+  card.classList.toggle('has-preview', showPreview);
+  if (!showPreview) continue;
+  const title = 'Preview ao vivo — Canal ' + (slot + 1) + ' · ' + signal.name;
+  if (player?.dataset.path === path) {
+   player.title = title;
+   continue;
+  }
+  const frame = document.createElement('iframe');
+  frame.className = 'channel-preview';
+  frame.dataset.path = path;
+  frame.title = title;
+  frame.src = 'http://127.0.0.1:8889/' + path + '?muted=true';
+  frame.allow = 'autoplay; fullscreen';
+  frame.allowFullscreen = true;
+  card.querySelector('.channel-meter').before(frame);
  }
- for (const {slot, source: signal} of entries) {
-  const panel = document.createElement('section');
-  const title = document.createElement('strong');
-  title.textContent = 'Canal ' + (slot + 1) + ' · ' + signal.name;
-  const player = document.createElement('iframe');
-  player.title = 'Preview ao vivo — ' + title.textContent;
-  player.src = 'http://127.0.0.1:8889/' + signal.preview_path + '?muted=true';
-  player.allow = 'autoplay; fullscreen';
-  player.style.cssText = 'display:block;width:100%;aspect-ratio:16/9;border:0;background:#0d1724;border-radius:9px';
-  panel.append(title, player);
-  previewGrid.append(panel);
- }
-}
+};
 const oldRender=render;render=()=>{
  const button=document.activeElement;
  const key=button?.dataset.capture;
  const page=button?.closest('.page');
- oldRender();status();renderPreviews();updateClocks();
+ oldRender();status();updateClocks();
  if(key!==undefined)page?.querySelector('[data-capture="'+key+'"]')?.focus({preventScroll:true});
 };
 render();refresh();setInterval(refresh,2500);setInterval(updateClocks,1000);
