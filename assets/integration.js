@@ -31,7 +31,6 @@ function status(){
  const canStop=online&&pilotSlots.some(active);
  for(const button of document.querySelectorAll('[onclick="chooseRecord()"],[onclick="recordAll()"]'))button.disabled=pending||!canRecord;
  for(const button of document.querySelectorAll('[onclick="stopAll()"]'))button.disabled=pending||!canStop;
- document.querySelector('.quick-system').textContent=online?'Agente local online · '+(health.ffmpeg?'FFmpeg disponível':'Instale FFmpeg'):'Agente indisponível';
  document.querySelector('.system-list').textContent=online?'API online · Preview indisponível · '+(health.ffmpeg?'FFmpeg disponível':'FFmpeg ausente'):'API indisponível';
  const stats=document.querySelectorAll('.stats .stat');
  stats[0].querySelector('.stat-number').textContent=online?pilotSlots.filter(source).length:'—';stats[0].querySelector('.stat-sub').textContent='Fontes vinculadas ao agente';
@@ -58,7 +57,7 @@ channelCard=function(i){
   <span class="rec-state ${r&&online?'recording':''}"><span class="rec-dot"></span>${state}</span>
   <strong class="capture-clock">${r&&online?clock(r):'—'}</strong>
  </div><div class="channel-controls"><small>${pilot?'Preview indisponível':'Fora do piloto'}</small>
-  <div class="channel-btns">${pilot?`<button class="mini-control" data-capture="${i}" ${!online||pending||!s||(!r&&!health.ffmpeg)?'disabled':''} onclick="toggleRecord(${i})" aria-label="${r?'Parar':'Gravar'} canal ${i+1}">${r?'■ STOP':'● REC'}</button>
+  <div class="channel-btns">${pilot?`<button class="mini-control" data-capture="${i}" data-recording="${Boolean(r)}" ${!online||pending||!s||(!r&&!health.ffmpeg)?'disabled':''} onclick="toggleRecord(${i})" aria-label="${r?'Parar':'Gravar'} canal ${i+1}">${r?'■ STOP':'● REC'}</button>
   <button class="mini-control" onclick="channelDetails(${i})" aria-label="Configurar canal ${i+1}" ${!online?'disabled':''}>⚙</button>`:''}</div>
  </div></article>`;
 };
