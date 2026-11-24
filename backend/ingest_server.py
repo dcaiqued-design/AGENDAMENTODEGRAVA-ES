@@ -113,6 +113,29 @@ class Engine:
             db.execute("UPDATE recordings SET status='interrupted', ended_at=?, error='Agente reiniciado durante a gravação.' WHERE status='recording'", (stamp(),))
             db.execute("UPDATE jobs SET status='interrupted' WHERE status='running'")
 
+    def channel_map(self):
+        with connection() as db:
+            db.execute("CREATE TABLE IF NOT EXISTS channels (slot INTEGER PRIMARY KEY CHECK(slot BETWEEN 0 AND 3), source_id TEXT NOT NULL UNIQUE REFERENCES sources(id))")
+            return [dict(r) for r in db.execute("SELECT slot,source_id FROM channels ORDER BY slot")]
+
+    def bind_channel(self, data):
+        slot = data.get("slot")
+        source_id = str(data.get("source_id", ""))
+        if type(slot) is not int or not 0 <= slot <= 3:
+            raise ValueError("Canal deve estar entre 1 e 4.")
+        with self.lock:
+            self.channel_map()
+            with connection() as db:
+                if not db.execute("SELECT id FROM sources WHERE id=?", (source_id,)).fetchone():
+                    raise ValueError("Fonte não cadastrada.")
+                current = db.execute("SELECT source_id FROM channels WHERE slot=?", (slot,)).fetchone()
+                if current and any(x["source_id"] == current["source_id"] for x in self.active.values()):
+                    raise ValueError("Pare a gravação antes de trocar a fonte do canal.")
+                if db.execute("SELECT slot FROM channels WHERE source_id=? AND slot<>?", (source_id,slot)).fetchone():
+                    raise ValueError("Fonte já vinculada a outro canal.")
+                db.execute("INSERT INTO channels VALUES (?,?) ON CONFLICT(slot) DO UPDATE SET source_id=excluded.source_id", (slot,source_id))
+        return {"slot":slot,"source_id":source_id}
+
     def sources(self):
         with connection() as db:
             rows = db.execute("SELECT id,name,protocol,created_at FROM sources ORDER BY created_at DESC").fetchall()
@@ -375,6 +398,8 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 if path == "/api/health":
                     return self._json(200,engine.health())
+                if path == "/api/channels":
+                    return self._json(200,engine.channel_map())
                 if path == "/api/sources":
                     return self._json(200,engine.sources())
                 if path == "/api/jobs":
@@ -386,7 +411,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(500,{"error":"Falha interna da API."})
         if path == "/":
             self.path = "/index.html"
-        elif path not in ("/index.html","/operacao-real.html","/assets/styles.css","/assets/app.js","/assets/real.js"):
+        elif path not in ("/index.html","/operacao-real.html","/assets/styles.css","/assets/app.js","/assets/real.js","/assets/integration.js","/assets/real.css"):
             return self.send_error(404)
         return super().do_GET()
 
@@ -406,6 +431,8 @@ class Handler(SimpleHTTPRequestHandler):
             if not isinstance(data,dict):
                 raise ValueError("Corpo deve ser um objeto JSON.")
             path = self.path.split("?",1)[0]
+            if path == "/api/channels":
+                return self._json(200,engine.bind_channel(data))
             if path == "/api/sources":
                 return self._json(201,engine.add_source(data))
             if path == "/api/jobs":
@@ -431,7 +458,7 @@ if __name__ == "__main__":
     engine = Engine()
     threading.Thread(target=engine.loop,daemon=True,name="ingest-scheduler").start()
     print("Ingest Control — serviço local de gravação (piloto)")
-    print("Painel: http://127.0.0.1:"+str(PORT)+"/operacao-real.html")
+    print("Painel: http://127.0.0.1:"+str(PORT)+"/")
     print("Pasta de arquivos:",MEDIA_DIR)
     print("FFmpeg:", "localizado" if ffmpeg_available() else "NÃO localizado")
     print("IMPORTANTE: não exponha esta porta à rede. Use somente sinais autorizados.")
