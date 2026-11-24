@@ -31,7 +31,7 @@ function status(){
  const canStop=online&&pilotSlots.some(active);
  for(const button of document.querySelectorAll('[onclick="chooseRecord()"],[onclick="recordAll()"]'))button.disabled=pending||!canRecord;
  for(const button of document.querySelectorAll('[onclick="stopAll()"]'))button.disabled=pending||!canStop;
- document.querySelector('.system-list').textContent=online?'API online · Preview indisponível · '+(health.ffmpeg?'FFmpeg disponível':'FFmpeg ausente'):'API indisponível';
+ document.querySelector('.system-list').textContent=online?'API online · '+(health.ffmpeg?'FFmpeg disponível':'FFmpeg ausente'):'API indisponível';
  const stats=document.querySelectorAll('.stats .stat');
  stats[0].querySelector('.stat-number').textContent=online?pilotSlots.filter(source).length:'—';stats[0].querySelector('.stat-sub').textContent='Fontes vinculadas ao agente';
  stats[1].querySelector('.stat-sub').textContent=online?'Processos informados pelo agente':'Estado desconhecido';
@@ -56,7 +56,7 @@ channelCard=function(i){
  </div><div class="channel-meter">
   <span class="rec-state ${r&&online?'recording':''}"><span class="rec-dot"></span>${state}</span>
   <strong class="capture-clock">${r&&online?clock(r):'—'}</strong>
- </div><div class="channel-controls"><small>${pilot?'Preview indisponível':'Fora do piloto'}</small>
+ </div><div class="channel-controls"><small>${pilot?(s?.preview_path?'Preview na tela Sinais':'Preview indisponível'):'Fora do piloto'}</small>
   <div class="channel-btns">${pilot?`<button class="mini-control" data-capture="${i}" data-recording="${Boolean(r)}" ${!online||pending||!s||(!r&&!health.ffmpeg)?'disabled':''} onclick="toggleRecord(${i})" aria-label="${r?'Parar':'Gravar'} canal ${i+1}">${r?'■ STOP':'● REC'}</button>
   <button class="mini-control" onclick="channelDetails(${i})" aria-label="Configurar canal ${i+1}" ${!online?'disabled':''}>⚙</button>`:''}</div>
  </div></article>`;
@@ -146,11 +146,47 @@ function refresh(){
  })();
  return refreshing;
 }
+const previewCard = $('signals-channels').closest('.card');
+previewCard.querySelector('h2').textContent = 'Preview ao vivo';
+previewCard.querySelector('.badge').remove();
+const previewGrid = document.createElement('div');
+previewGrid.className = 'channel-grid';
+previewGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))';
+$('signals-channels').before(previewGrid);
+let previewKey;
+function renderPreviews() {
+ const entries = currentPage === 'signals' && online
+  ? pilotSlots.map(slot => ({slot, source: source(slot)}))
+   .filter(entry => ['live/test', 'live/teste'].includes(entry.source?.preview_path))
+  : [];
+ const key = JSON.stringify([currentPage === 'signals', entries]);
+ if (previewKey === key) return;
+ previewKey = key;
+ previewGrid.replaceChildren();
+ previewGrid.hidden = currentPage !== 'signals';
+ if (!entries.length && currentPage === 'signals') {
+  const note = document.createElement('p');
+  note.textContent = 'Vincule uma fonte RTMP do MediaMTX local para abrir o preview.';
+  previewGrid.append(note);
+ }
+ for (const {slot, source: signal} of entries) {
+  const panel = document.createElement('section');
+  const title = document.createElement('strong');
+  title.textContent = 'Canal ' + (slot + 1) + ' · ' + signal.name;
+  const player = document.createElement('iframe');
+  player.title = 'Preview ao vivo — ' + title.textContent;
+  player.src = 'http://127.0.0.1:8889/' + signal.preview_path + '?muted=true';
+  player.allow = 'autoplay; fullscreen';
+  player.style.cssText = 'display:block;width:100%;aspect-ratio:16/9;border:0;background:#0d1724;border-radius:9px';
+  panel.append(title, player);
+  previewGrid.append(panel);
+ }
+}
 const oldRender=render;render=()=>{
  const button=document.activeElement;
  const key=button?.dataset.capture;
  const page=button?.closest('.page');
- oldRender();status();updateClocks();
+ oldRender();status();renderPreviews();updateClocks();
  if(key!==undefined)page?.querySelector('[data-capture="'+key+'"]')?.focus({preventScroll:true});
 };
 render();refresh();setInterval(refresh,2500);setInterval(updateClocks,1000);

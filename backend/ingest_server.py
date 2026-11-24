@@ -139,8 +139,18 @@ class Engine:
 
     def sources(self):
         with connection() as db:
-            rows = db.execute("SELECT id,name,protocol,created_at FROM sources ORDER BY created_at DESC").fetchall()
-            return [dict(row) for row in rows]
+            rows = db.execute("SELECT id,name,protocol,created_at,url FROM sources ORDER BY created_at DESC")
+            sources = []
+            for row in rows:
+                source = dict(row)
+                address = source.pop("url")
+                # Only the two public paths of the local MediaMTX pilot are browser-visible.
+                for path in ("live/test", "live/teste"):
+                    if address == f"rtmp://127.0.0.1:1935/{path}":
+                        source["preview_path"] = path
+                        break
+                sources.append(source)
+            return sources
 
     def add_source(self, data):
         name = str(data.get("name", "")).strip()[:100]
