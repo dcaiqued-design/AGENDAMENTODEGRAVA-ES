@@ -8,3 +8,11 @@
 - Não armazene chaves RTMP, segredos, credenciais ou dados sensíveis no JavaScript público ou em localStorage.
 - Separe frontend, backend e agente de captura Windows. SDI/DeckLink exige integração nativa; o navegador não capta SDI diretamente.
 - Preserve acessibilidade, responsividade e temas. Valide qualquer alteração em navegadores desktop e mobile.
+
+## Ambiente de desenvolvimento reproduzível
+
+- Ler `docs/AMBIENTE_DESENVOLVIMENTO.md` antes de preparar o ambiente.
+- Setup e testes: `python scripts/setup_dev.py`.
+- Para exigir FFmpeg e protocolos de captura: acrescentar `--require-capture`.
+- Inicialização: `python scripts/start_dev.py` (loopback porta 8766; dados em `~/IngestControl-dev`).
+- Não confundir esses arquivos versionados com confirmação de configuração salva/publicada na interface do Codex.
