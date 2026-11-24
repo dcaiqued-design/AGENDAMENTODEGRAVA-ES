@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 
 class IngestEngineTest(unittest.TestCase):
@@ -68,10 +69,6 @@ class IngestEngineTest(unittest.TestCase):
     def test_file_name_is_sanitized(self):
         self.assertEqual(self.mod.safe_name("../../Jornal Àçúcar??"), "jornal-acucar")
 
-
-if __name__=="__main__":
-    unittest.main()
-
 class ChannelIntegrationTest(IngestEngineTest):
     def test_channel_binding_persists_and_does_not_expose_url(self):
         s = self.engine.add_source({'name':'Canal persistente','protocol':'rtmp','url':'rtmp://example.invalid/live/secret'})
@@ -93,3 +90,48 @@ class ChannelIntegrationTest(IngestEngineTest):
         with self.assertRaises(ValueError):
             self.engine.bind_channel({'slot':2,'source_id':b['id']})
         self.engine.active.clear()
+
+
+    def test_stop_and_dashboard_agree_when_output_is_missing(self):
+        source = self.engine.add_source({
+            "name": "Sem mídia", "protocol": "rtmp",
+            "url": "rtmp://example.invalid/live/sintetico"
+        })
+        process = Mock(returncode=0)
+        process.poll.return_value = None
+        self.engine.spawn = Mock(return_value=process)
+        with patch.object(self.mod, "ffmpeg_available", return_value=True):
+            rec = self.engine.start(source["id"])
+        result = self.engine.stop(rec["id"])
+        row = next(r for r in self.engine.dashboard()["recordings"] if r["id"] == rec["id"])
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(row["status"], "failed")
+        self.assertFalse(row["downloadable"])
+        self.assertIsNone(self.engine.download_path(rec["id"]))
+
+    def test_completed_file_metadata_and_removal(self):
+        source = self.engine.add_source({
+            "name": "Mídia de teste", "protocol": "srt",
+            "url": "srt://example.invalid:9000?mode=caller"
+        })
+        process = Mock(returncode=0)
+        process.poll.return_value = None
+        self.engine.spawn = Mock(return_value=process)
+        with patch.object(self.mod, "ffmpeg_available", return_value=True):
+            rec = self.engine.start(source["id"])
+        path = Path(rec["file_path"])
+        path.write_bytes(bytes(2048))
+        self.assertEqual(self.engine.stop(rec["id"])["status"], "completed")
+        self.assertEqual(self.engine.download_path(rec["id"]), path)
+        before = next(r for r in self.engine.recordings() if r["id"] == rec["id"])
+        self.assertEqual(before["file_size_bytes"], 2048)
+        self.assertTrue(before["downloadable"])
+        self.assertGreaterEqual(before["duration_seconds"], 0)
+        path.unlink()
+        after = next(r for r in self.engine.recordings() if r["id"] == rec["id"])
+        self.assertIsNone(after["file_size_bytes"])
+        self.assertFalse(after["downloadable"])
+
+
+if __name__ == "__main__":
+    unittest.main()

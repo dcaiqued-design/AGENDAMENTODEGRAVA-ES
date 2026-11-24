@@ -1,37 +1,23 @@
-# Ingest Control — Canal Rural
+# Ingest Control v0.7 — Canal Rural
 
-Sistema demonstrativo para monitoramento visual de sinais, programação de gravações e gerenciamento de ingest.
+Painel de ingest com agente FFmpeg e banco SQLite no computador de gravação. Esta é uma versão de revisão para o piloto.
 
-## Versão v0.6
+## Operação local
 
-Migração do protótipo HTML do Ingest Control para uma base de código versionada. Interface azul-marinho e branca com menu lateral, quatro canais simulados, indicadores operacionais, agenda avançada, filtros, histórico demonstrativo e seleção de temas.
+1. Instale Python 3.10+ e FFmpeg com os protocolos RTMP/RTMPS e SRT no Windows.
+2. Execute `INICIAR_INGEST.bat` e abra <http://127.0.0.1:8765/> no próprio computador.
+3. Em **Sinais**, use a engrenagem dos canais 1 e 2 para vincular as fontes do piloto. Informe a URL somente no painel local.
+4. Use **REC** e **STOP**. Confira o estado e o tempo decorrido em **Gravações**, e baixe os MP4 concluídos em **Arquivos**.
 
-**Atenção:** não é uma solução de gravação em produção. Os previews, status e comandos REC/STOP são demonstrativos. Não há recepção ou gravação real de RTMP, SRT e SDI. Os agendamentos demonstrativos são armazenados localmente no navegador (localStorage), não em servidor.
+Os canais 3 e 4 estão fora do piloto. O indicador **Processo ativo** acompanha o FFmpeg. A verificação de imagem e áudio é feita no MP4. Os agendamentos pontuais executam REC e STOP pelo agente, com margens de pré e pós-gravação. O perfil usa MP4 com vídeo copiado e áudio AAC 128 kb/s. Opções avançadas pendentes aparecem desabilitadas no modo local.
 
-## Estrutura
+O agente escuta em `127.0.0.1`. O banco e as mídias ficam em `%USERPROFILE%\IngestControl`. Mantenha a API local e guarde as URLs de sinal fora do repositório.
 
-- `index.html`: interface e estrutura de navegação
-- `assets/styles.css`: estilos e temas
-- `assets/app.js`: interações e formulário demonstrativo
-- `AGENTS.md`: diretrizes para o Codex
+## Desenvolvimento e revisão
 
-## Executar
+- `python scripts/setup_dev.py --require-capture` verifica os protocolos, a sintaxe JavaScript e os testes.
+- `python scripts/start_dev.py` abre o painel em <http://127.0.0.1:8766/> com um banco separado.
+- Abrir `index.html` diretamente no navegador mostra a prévia interativa com dados simulados.
+- [Roteiro de validação no Windows](docs/VALIDACAO_V07_WINDOWS.md)
 
-Não são necessárias dependências Node. Na pasta do repositório:
-
-```bash
-python -m http.server 8000
-```
-
-Abra `http://localhost:8000`.
-
-## Próximas etapas
-
-1. Modelagem de dados e API persistente para fontes, programas, canais e agendamentos.
-2. Autenticação, permissões e logs auditáveis antes de uso por operadores.
-3. Agente Windows para captação real com FFmpeg/MediaMTX, seguido de SRT e SDI/DeckLink.
-4. Monitoramento real de sinal, gravações, falhas e arquivos.
-5. Integração de agenda com programação automática de REC/STOP.
-6. Testes de carga, reconexão, alertas e segurança.
-
-O Codex Cloud é um ambiente de desenvolvimento, não substitui um servidor de gravação contínua. Não cadastre chaves RTMP, credenciais ou dados confidenciais no código.
+A v0.6 está na linha anterior do repositório. A integração v0.7 segue na branch `feat/v07-integracao-painel-azul`.

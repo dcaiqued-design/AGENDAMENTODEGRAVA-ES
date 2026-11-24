@@ -1,6 +1,6 @@
 # Piloto de gravação real — Ingest Control
 
-Esta branch adiciona um **agente de gravação local**, diferente do protótipo de interface v0.6. Os controles do painel original permanecem demonstrativos. A execução real é feita na página **/operacao-real.html**, servida pelo agente.
+Esta branch adiciona um **agente de gravação local**, diferente do protótipo de interface v0.6. Na v0.7, os controles integrados estão na raiz do agente. A página /operacao-real.html continua disponível para diagnóstico.
 
 ## Requisitos
 
@@ -42,7 +42,7 @@ Para mudar o destino **antes de iniciar o agente**, configure \`INGEST_DATA_DIR\
 - Pré e pós-gravação aceitam 0–30 minutos. Até 4 gravações simultâneas, no máximo uma sessão por fonte; o limite é lógico, não garante desempenho do hardware.
 - O vídeo é copiado para MP4 quando compatível (ex.: H.264). O áudio é convertido para AAC; fontes com codecs incompatíveis podem falhar. Verifique o resultado antes de uso operacional.
 - Se o computador estiver desligado durante o horário, o agendamento será marcado como perdido após a janela. Se o agente fechar durante a gravação, a sessão será marcada como interrompida na próxima inicialização. Arquivos MP4 fragmentados podem ter recuperação parcial.
-- O sistema não faz backup automático, não impõe cota, não faz rotação de logs nem garante entrega à ilha de edição.
+- O sistema não faz backup automático, não impõe cota, nem garante entrega à ilha de edição.
 - O FFmpeg recebe a URL sem passar por shell. Ainda assim, somente cadastre fontes confiáveis, pois ele fará conexões de saída para os endereços informados.
 
 ### Testes automáticos

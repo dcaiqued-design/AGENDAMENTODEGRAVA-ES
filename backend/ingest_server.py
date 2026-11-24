@@ -24,11 +24,11 @@ from urllib.parse import urlsplit
 BASE = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("INGEST_DATA_DIR", str(Path.home() / "IngestControl"))).expanduser().resolve()
 MEDIA_DIR = DATA_DIR / "gravacoes"
-LOG_DIR = DATA_DIR / "logs"
 DB_FILE = DATA_DIR / "ingest.sqlite3"
 FFMPEG = os.environ.get("INGEST_FFMPEG", "ffmpeg")
 PORT = int(os.environ.get("INGEST_PORT", "8765"))
 MAX_SIMULTANEOUS = 4
+MIN_MEDIA_BYTES = 1024
 
 
 def now():
@@ -81,7 +81,6 @@ class Engine:
     def __init__(self, spawn=subprocess.Popen):
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.active = {}
         self.spawn = spawn
@@ -106,6 +105,10 @@ class Engine:
                   status TEXT NOT NULL, started_at TEXT NOT NULL,
                   ended_at TEXT, error TEXT
                 );
+                CREATE TABLE IF NOT EXISTS channels (
+                  slot INTEGER PRIMARY KEY CHECK(slot BETWEEN 0 AND 3),
+                  source_id TEXT NOT NULL UNIQUE REFERENCES sources(id)
+                );
                 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, begins_at);
                 CREATE INDEX IF NOT EXISTS idx_recordings_source ON recordings(source_id, started_at);
             """)
@@ -115,7 +118,6 @@ class Engine:
 
     def channel_map(self):
         with connection() as db:
-            db.execute("CREATE TABLE IF NOT EXISTS channels (slot INTEGER PRIMARY KEY CHECK(slot BETWEEN 0 AND 3), source_id TEXT NOT NULL UNIQUE REFERENCES sources(id))")
             return [dict(r) for r in db.execute("SELECT slot,source_id FROM channels ORDER BY slot")]
 
     def bind_channel(self, data):
@@ -124,7 +126,6 @@ class Engine:
         if type(slot) is not int or not 0 <= slot <= 3:
             raise ValueError("Canal deve estar entre 1 e 4.")
         with self.lock:
-            self.channel_map()
             with connection() as db:
                 if not db.execute("SELECT id FROM sources WHERE id=?", (source_id,)).fetchone():
                     raise ValueError("Fonte não cadastrada.")
@@ -149,10 +150,15 @@ class Engine:
             raise ValueError("Informe um nome para o sinal.")
         if protocol not in ("rtmp", "rtmps", "srt"):
             raise ValueError("Nesta versão, somente RTMP/RTMPS e SRT.")
-        if len(url) > 2048 or any(ch in url for ch in "\r\n\x00"):
+        if len(url) > 2048 or any(ord(ch) < 32 or ord(ch) == 127 for ch in url):
             raise ValueError("Endereço de sinal inválido.")
-        parts = urlsplit(url)
-        if parts.scheme.lower() != protocol or not parts.netloc:
+        try:
+            parts = urlsplit(url)
+            valid = parts.scheme.lower() == protocol and bool(parts.hostname)
+            valid = valid and (parts.port is not None or protocol != "srt")
+        except ValueError:
+            valid = False
+        if not valid:
             raise ValueError("O endereço deve corresponder ao protocolo selecionado.")
         source_id = uuid.uuid4().hex
         with self.lock, connection() as db:
@@ -212,13 +218,48 @@ class Engine:
                 raise ValueError("Somente agendamentos pendentes podem ser cancelados.")
         return {"id":job_id,"status":"canceled"}
 
+    def _media_path(self, file_path):
+        path = Path(file_path).resolve()
+        if path.parent == MEDIA_DIR.resolve() and path.suffix.lower() == ".mp4":
+            return path
+        return None
+
     def recordings(self):
         with connection() as db:
             rows = db.execute("""
                 SELECT r.*,s.name AS source_name FROM recordings r
-                JOIN sources s ON s.id=r.source_id ORDER BY r.started_at DESC LIMIT 250
+                JOIN sources s ON s.id=r.source_id
+                ORDER BY (r.status='recording') DESC,r.started_at DESC,r.rowid DESC LIMIT 250
             """).fetchall()
-            return [dict(row) for row in rows]
+        result = []
+        for row in rows:
+            rec = dict(row)
+            path = self._media_path(rec["file_path"])
+            try:
+                size = path.stat().st_size if path and path.is_file() else None
+            except OSError:
+                size = None
+            end = parse_date(rec["ended_at"]) if rec["ended_at"] else now()
+            rec.update(
+                file_name=Path(rec["file_path"]).name,
+                file_size_bytes=size,
+                duration_seconds=max(0, int((end - parse_date(rec["started_at"])).total_seconds())),
+                downloadable=rec["status"] == "completed" and size is not None and size >= MIN_MEDIA_BYTES,
+            )
+            result.append(rec)
+        return result
+
+    def download_path(self, rid):
+        with connection() as db:
+            row = db.execute(
+                "SELECT file_path FROM recordings WHERE id=? AND status='completed'", (rid,)
+            ).fetchone()
+        return self._media_path(row["file_path"]) if row else None
+
+    def dashboard(self):
+        with self.lock:
+            return {"health": self.health(), "channels": self.channel_map(),
+                    "sources": self.sources(), "jobs": self.jobs(), "recordings": self.recordings()}
 
     def _start_locked(self, source_id, title, job_id=None):
         if not ffmpeg_available():
@@ -234,33 +275,31 @@ class Engine:
         rid = uuid.uuid4().hex
         file_name = now().strftime("%Y%m%d_%H%M%S") + "_" + safe_name(title) + "_" + rid[:8] + ".mp4"
         destination = MEDIA_DIR / file_name
-        log_file = LOG_DIR / (rid + ".log")
-        # Captura MP4: vídeo precisa ser compatível com o container, geralmente H.264.
-        # A camada de áudio é convertida para AAC. Não há shell nem interpolação de comandos.
         cmd = [
-            FFMPEG, "-hide_banner", "-loglevel", "warning", "-y",
-            "-i", source["url"], "-map", "0:v:0", "-map", "0:a:0?",
+            FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
+            "-rw_timeout", "8000000", "-i", source["url"], "-map", "0:v:0", "-map", "0:a:0?",
             "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+frag_keyframe+empty_moov",
             "-f", "mp4", str(destination)
         ]
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        log = open(log_file, "ab")
+        # FFmpeg pode registrar a URL inteira em erros. O histórico guarda apenas o código de saída.
+        proc = self.spawn(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL, cwd=str(MEDIA_DIR), creationflags=flags)
         try:
-            proc = self.spawn(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
-                              stderr=log, cwd=str(MEDIA_DIR), creationflags=flags)
-        except Exception:
-            log.close()
+            with connection() as db:
+                db.execute("""
+                    INSERT INTO recordings(id,source_id,job_id,title,file_path,status,started_at)
+                    VALUES (?,?,?,?,?,'recording',?)
+                """, (rid,source_id,job_id,title,str(destination),stamp()))
+                if job_id:
+                    db.execute("UPDATE jobs SET status='running',recording_id=? WHERE id=?", (rid,job_id))
+        except BaseException:
+            proc.kill()
+            proc.wait()
+            proc.stdin.close()
             raise
-        log.close()
         self.active[rid] = {"process":proc,"source_id":source_id,"job_id":job_id}
-        with connection() as db:
-            db.execute("""
-                INSERT INTO recordings(id,source_id,job_id,title,file_path,status,started_at)
-                VALUES (?,?,?,?,?,'recording',?)
-            """, (rid,source_id,job_id,title,str(destination),stamp()))
-            if job_id:
-                db.execute("UPDATE jobs SET status='running',recording_id=? WHERE id=?", (rid,job_id))
         return {"id":rid,"status":"recording","file_path":str(destination)}
 
     def start(self, source_id, title=None):
@@ -268,13 +307,13 @@ class Engine:
             return self._start_locked(str(source_id), str(title or "Gravacao manual")[:100])
 
     def _finish_locked(self, rid, status, error=None):
-        session = self.active.pop(rid, None)
+        session = self.active.get(rid)
         with connection() as db:
             rec = db.execute("SELECT job_id,file_path FROM recordings WHERE id=?", (rid,)).fetchone()
             if not rec:
-                return
+                return status
             path = Path(rec["file_path"])
-            if status == "completed" and (not path.is_file() or path.stat().st_size < 1024):
+            if status == "completed" and (not path.is_file() or path.stat().st_size < MIN_MEDIA_BYTES):
                 status, error = "failed", "Arquivo de saída ausente ou muito pequeno."
             db.execute("UPDATE recordings SET status=?, ended_at=?, error=? WHERE id=?",
                        (status,stamp(),error,rid))
@@ -283,29 +322,33 @@ class Engine:
                 db.execute("UPDATE jobs SET status=? WHERE id=? AND status='running'",
                            (job_status,rec["job_id"]))
 
-    def _stop_locked(self, rid, scheduled=False):
+        self.active.pop(rid, None)
+        if session and session["process"].stdin:
+            session["process"].stdin.close()
+        return status
+
+    def _stop_locked(self, rid):
         session = self.active.get(rid)
         if not session:
             raise ValueError("Gravação não está ativa neste agente.")
         proc = session["process"]
-        if proc.poll() is None:
-            try:
-                proc.stdin.write(b"q\n")
-                proc.stdin.flush()
-                proc.wait(timeout=12)
-            except (BrokenPipeError, OSError, subprocess.TimeoutExpired):
-                if proc.poll() is None:
-                    proc.terminate()
-                    try:
-                        proc.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                        proc.wait(timeout=5)
-            finally:
-                if proc.stdin:
-                    proc.stdin.close()
+        if proc.poll() is not None:
+            status = self._finish_locked(rid, "failed", "FFmpeg terminou antes do comando STOP.")
+            return {"id": rid, "status": status}
+        try:
+            proc.stdin.write(b"q\n")
+            proc.stdin.flush()
+            proc.wait(timeout=12)
+        except (BrokenPipeError, OSError, subprocess.TimeoutExpired):
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=5)
         status = "completed" if proc.returncode == 0 else "failed"
-        self._finish_locked(rid,status,None if status == "completed" else "FFmpeg retornou código " + str(proc.returncode))
+        status = self._finish_locked(rid,status,None if status == "completed" else "FFmpeg retornou código " + str(proc.returncode))
         return {"id":rid,"status":status}
 
     def stop(self, rid):
@@ -327,7 +370,7 @@ class Engine:
             for job in ongoing:
                 if current >= parse_date(job["ends_at"]) + timedelta(seconds=job["post_seconds"]):
                     if job["recording_id"] in self.active:
-                        self._stop_locked(job["recording_id"],scheduled=True)
+                        self._stop_locked(job["recording_id"])
             with connection() as db:
                 waiting = db.execute("""
                     SELECT * FROM jobs WHERE status='scheduled' ORDER BY begins_at ASC
@@ -396,6 +439,11 @@ class Handler(SimpleHTTPRequestHandler):
         path = self.path.split("?",1)[0]
         if path.startswith("/api/"):
             try:
+                if path == "/api/dashboard":
+                    return self._json(200,engine.dashboard())
+                match = re.fullmatch(r"/api/recordings/([a-f0-9]{32})/file", path)
+                if match:
+                    return self._download(match.group(1))
                 if path == "/api/health":
                     return self._json(200,engine.health())
                 if path == "/api/channels":
@@ -414,6 +462,30 @@ class Handler(SimpleHTTPRequestHandler):
         elif path not in ("/index.html","/operacao-real.html","/assets/styles.css","/assets/app.js","/assets/real.js","/assets/integration.js","/assets/real.css"):
             return self.send_error(404)
         return super().do_GET()
+
+    def _download(self, rid):
+        path = engine.download_path(rid)
+        try:
+            stream = path.open("rb") if path and path.is_file() else None
+        except OSError:
+            stream = None
+        if stream is None:
+            return self._json(404, {"error": "Arquivo indisponível."})
+        with stream:
+            size = os.fstat(stream.fileno()).st_size
+            if size < MIN_MEDIA_BYTES:
+                return self._json(404, {"error": "Arquivo indisponível."})
+            self.send_response(200)
+            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Content-Length", str(size))
+            self.send_header("Content-Disposition", f'attachment; filename="{safe_name(path.stem)}.mp4"')
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            try:
+                shutil.copyfileobj(stream, self.wfile)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
     def do_POST(self):
         if not self._local_request():
