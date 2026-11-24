@@ -71,3 +71,25 @@ class IngestEngineTest(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
+
+class ChannelIntegrationTest(IngestEngineTest):
+    def test_channel_binding_persists_and_does_not_expose_url(self):
+        s = self.engine.add_source({'name':'Canal persistente','protocol':'rtmp','url':'rtmp://example.invalid/live/secret'})
+        self.engine.bind_channel({'slot':0,'source_id':s['id']})
+        self.assertIn({'slot':0,'source_id':s['id']}, self.mod.Engine().channel_map())
+        self.assertNotIn('secret', repr(self.engine.channel_map()))
+        with self.assertRaises(ValueError):
+            self.engine.bind_channel({'slot':1,'source_id':s['id']})
+        with self.assertRaises(ValueError):
+            self.engine.bind_channel({'slot':4,'source_id':s['id']})
+        with self.assertRaises(ValueError):
+            self.engine.bind_channel({'slot':0,'source_id':'missing'})
+
+    def test_cannot_replace_channel_while_recording(self):
+        a=self.engine.add_source({'name':'A','protocol':'rtmp','url':'rtmp://example.invalid/a'})
+        b=self.engine.add_source({'name':'B','protocol':'srt','url':'srt://example.invalid:9000'})
+        self.engine.bind_channel({'slot':2,'source_id':a['id']})
+        self.engine.active['test']={'source_id':a['id']}
+        with self.assertRaises(ValueError):
+            self.engine.bind_channel({'slot':2,'source_id':b['id']})
+        self.engine.active.clear()
