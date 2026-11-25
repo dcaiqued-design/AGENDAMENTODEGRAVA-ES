@@ -144,18 +144,24 @@ body.rural {
   #dashboard-channels { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
-#signals-channels .channel-preview {
+:is(#signals-channels,#dashboard-channels) .channel-preview {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
   border: 0;
   background: #0d1724;
 }
-#signals-channels .has-preview .channel-meter {
+:is(#signals-channels,#dashboard-channels) .has-preview .channel-meter {
   display: flex;
   align-items: center;
   justify-content: space-between;
   min-height: 0;
   padding: 8px 10px;
 }
-#signals-channels .has-preview .capture-clock { font-size: 14px; }
+:is(#signals-channels,#dashboard-channels) .has-preview .capture-clock { font-size: 14px; }
+
+#bind-form,#new-source,#invite-form {display:grid;gap:.75rem;margin:1rem 0}
+#bind-form label,#new-source label,#invite-form label {display:grid;gap:.3rem}
+#calendar-status,#bind-error {min-height:1.25em}
+#google-reservation {max-width:100%;margin:.65rem 0}
+#page-agenda details summary,#modal details summary {cursor:pointer;padding:.7rem 0;font-weight:600}
