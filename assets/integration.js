@@ -32,7 +32,7 @@ function status(){
  for(const button of document.querySelectorAll('[onclick="chooseRecord()"],[onclick="recordAll()"]'))button.disabled=pending||!canRecord;
  for(const button of document.querySelectorAll('[onclick="stopAll()"]'))button.disabled=pending||!canStop;
  document.querySelector('[data-filter="all"]').textContent='Todos ('+pilotSlots.length+')';
- document.querySelector('[data-filter="idle"]').textContent='Standby ('+pilotSlots.filter(slot=>!recording[slot]).length+')';
+ document.querySelector('[data-filter="idle"]').textContent='Captura inativa ('+pilotSlots.filter(slot=>!recording[slot]).length+')';
  const stats=document.querySelectorAll('.stats .stat');
  stats[0].querySelector('.stat-number').textContent=online?pilotSlots.filter(source).length:'—';
  stats[3].querySelector('.stat-number').textContent=online&&health.disk_free_bytes!=null?(health.disk_free_bytes/1024**3).toFixed(1)+' GB':'—';
@@ -58,18 +58,23 @@ function status(){
 }
 channelCard=function(i){
  const s=source(i),r=active(i),pilot=pilotSlots.includes(i);
- const state=!pilot?'Não integrado':!online?'Agente indisponível':!s?'Sem fonte vinculada':r?'Processo ativo':channelAlert[i]?'Falha na última gravação':'Standby';
+ const previous=s&&history.find(entry=>entry.source_id===s.id&&entry.status!=='recording');
+ const state=!pilot?'Canal não comissionado':!online?'Agente offline':!s?'Entrada não vinculada':r?'Sessão de captura ativa':!health.ffmpeg?'Codificador indisponível':'Captura inativa';
+ const previousState={completed:'Arquivo finalizado',failed:'Erro de captura',interrupted:'Captura interrompida'};
+ const result=previous ? previousState[previous.status] || previous.status : 'Sem registro';
  return `<article class="channel local-channel"><div class="channel-head">
-  <strong>Canal ${i+1} · ${safe(s?.name||NAMES[i].split(' – ')[1])}</strong><span class="signal">${safe((s?.protocol||FEEDS[i]).toUpperCase())}</span>
- </div><div class="channel-meter">
-  <span class="rec-state ${r&&online?'recording':''}"><span class="rec-dot"></span>${state}</span>
-  <strong class="capture-clock">${r&&online?clock(r):'—'}</strong>
- </div><div class="channel-controls"><small>${pilot?(s?.preview_path?'Preview local':'Preview indisponível'):'Fora do piloto'}</small>
+  <strong>Canal ${i+1} · ${safe(s?.name||NAMES[i].split(' – ')[1])}</strong><span class="signal">${safe(s ? s.protocol.toUpperCase() : '—')}</span>
+ </div><div class="channel-viewport"><span>Monitor de vídeo indisponível</span></div>
+ <div class="channel-meter channel-telemetry">
+  <div><small>Captura</small><span class="rec-state ${r&&online?'recording':''}"><span class="rec-dot"></span>${state}</span></div>
+  <div><small>Tempo de sessão</small><strong class="capture-clock">${r&&online?clock(r):'—'}</strong></div>
+  <div><small>Última sessão</small><strong class="${channelAlert[i]?'capture-error':''}" title="${safe(previous?.error||'')}">${safe(result)}</strong></div>
+ </div><div class="channel-controls"><small>${pilot?(s?.preview_path?'Monitor WebRTC':'Monitor WebRTC não configurado'):'Canal fora do piloto'}</small>
   <div class="channel-btns">${pilot?`<button class="mini-control" data-capture="${i}" data-recording="${Boolean(r)}" ${!online||pending||!s||(!r&&!health.ffmpeg)?'disabled':''} onclick="toggleRecord(${i})" aria-label="${r?'Parar':'Gravar'} canal ${i+1}">${r?'■ STOP':'● REC'}</button>
   <button class="mini-control" onclick="channelDetails(${i})" aria-label="Configurar canal ${i+1}" ${!online?'disabled':''}>⚙</button>`:''}</div>
  </div></article>`;
 };
-showNotice=()=>openModal('Integração local','Comandos reais no agente local. Preview, recorrência, SDI e acesso remoto ainda indisponíveis. O indicador REC confirma o processo FFmpeg; valide o arquivo gerado.');
+showNotice=()=>openModal('Integração local','O monitor WebRTC exibe as fontes locais compatíveis. O estado de captura acompanha o processo FFmpeg. Confira o arquivo finalizado para validar a gravação.');
 async function action(fn){if(!online||pending)return;pending=true;render();try{await fn();}catch(e){toast(e.message);}finally{await refresh();pending=false;render();}}
 toggleRecord=i=>action(async()=>{const s=source(i),r=active(i);if(!s)throw Error('Configure uma fonte primeiro.');const result=await api(r?'recordings/'+r.id+'/stop':'recordings/start',r?{}:{source_id:s.id,title:s.name});toast(!r?'FFmpeg iniciado.':result.status==='completed'?'Gravação finalizada.':'Gravação encerrada com falha. Confira o histórico.');});
 recordAll=()=>action(async()=>{const errors=[];for(const i of pilotSlots){const s=source(i);if(s&&!active(i)){try{await api('recordings/start',{source_id:s.id,title:s.name});}catch(e){errors.push('Canal '+(i+1)+': '+e.message);}}}toast(errors.length?errors.join(' · '):'Comandos enviados às fontes configuradas.');});
@@ -189,6 +194,24 @@ const signalGrid = $('signals-channels');
 signalGrid.closest('.card').querySelector('.badge').remove();
 const signalCards = [];
 const dashboardCards = [];
+let previewAvailable;
+let previewCheckPending = false;
+async function checkPreviewService() {
+ if (previewCheckPending || !online || !['dashboard','signals'].includes(currentPage) || !pilotSlots.some(slot=>source(slot)?.preview_path)) return;
+ previewCheckPending = true;
+ let available = false;
+ try {
+  await fetch('http://127.0.0.1:8889/', {mode:'no-cors', cache:'no-store', signal:AbortSignal.timeout(2000)});
+  available = true;
+ } catch (_) {
+  // Keep the status panel visible when the browser cannot reach MediaMTX.
+ }
+ previewCheckPending = false;
+ if (previewAvailable !== available) {
+  previewAvailable = available;
+  render();
+ }
+}
 $('dashboard-channels').classList.add('pilot-monitor');
 $('dashboard-channels').replaceChildren();
 signalGrid.replaceChildren();
@@ -214,10 +237,13 @@ window.renderLocalSignalCards = function () {
 
   const signal = source(slot);
   const path = signal?.preview_path;
-  const player = card.querySelector('.channel-preview');
+  const viewport = card.querySelector('.channel-viewport');
+  const player = viewport.querySelector('.channel-preview');
   const visible=page==='signals'||pilotSlots.includes(slot)&&(filter==='all'||filter==='rec'&&recording[slot]||filter==='idle'&&!recording[slot]||filter==='alert'&&channelAlert[slot]);
   card.style.display=visible?'':'none';
-  const showPreview = visible && currentPage === page && online && ['live/test', 'live/teste', 'live/stream'].includes(path);
+  const compatible = ['live/test', 'live/teste', 'live/stream'].includes(path);
+  const showPreview = visible && currentPage === page && online && compatible && previewAvailable === true;
+  viewport.firstElementChild.textContent = !compatible ? 'Monitor de vídeo não configurado' : previewAvailable === false ? 'Servidor WebRTC inacessível' : 'Conectando ao monitor de vídeo…';
   if (!showPreview || (player && player.dataset.path !== path)) player?.remove();
   card.classList.toggle('has-preview', showPreview);
   if (!showPreview) continue;
@@ -233,7 +259,7 @@ window.renderLocalSignalCards = function () {
   frame.src = 'http://127.0.0.1:8889/' + path + '?muted=true';
   frame.allow = 'autoplay; fullscreen';
   frame.allowFullscreen = true;
-  card.querySelector('.channel-meter').before(frame);
+  viewport.append(frame);
  }
  }
 };
@@ -329,8 +355,8 @@ const oldRender=render;render=()=>{
  const button=document.activeElement;
  const key=button?.dataset.capture;
  const page=button?.closest('.page');
- oldRender();status();renderDashboardInsights();updateClocks();
+ oldRender();status();renderDashboardInsights();updateClocks();void checkPreviewService();
  if(key!==undefined)page?.querySelector('[data-capture="'+key+'"]')?.focus({preventScroll:true});
 };
-render();refresh();setInterval(refresh,2500);setInterval(updateClocks,1000);
+render();refresh();setInterval(refresh,2500);setInterval(checkPreviewService,5000);setInterval(updateClocks,1000);
 })();

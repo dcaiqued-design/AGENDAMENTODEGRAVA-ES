@@ -435,3 +435,39 @@ body.rural {
 @media (max-width: 900px) {
   #page-dashboard .dashboard-insights { grid-template-columns: 1fr; }
 }
+
+/* Monitor de vídeo e telemetria de gravação ocupam áreas distintas. */
+.local-channel .channel-viewport {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  background: radial-gradient(ellipse at top, #193955, #0d1b2e 82%);
+  color: #b9cde3;
+  font-size: 12px;
+  text-align: center;
+}
+#dashboard-channels.pilot-monitor .channel-viewport { max-height: 250px; }
+.local-channel .channel-viewport .channel-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+}
+:is(#operation-channels,#signals-channels,#dashboard-channels.pilot-monitor) .local-channel .channel-telemetry {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(115px, 100%), 1fr));
+  gap: 7px 14px;
+  aspect-ratio: auto;
+  min-height: 0;
+  max-height: none;
+  padding: 10px 13px;
+  background: #13263c;
+  border-top: 1px solid #2d465e;
+}
+.channel-telemetry > div { min-width: 0; display: grid; gap: 3px; }
+.channel-telemetry small { color: #abc2dc; font-size: 10px; }
+.channel-telemetry strong, .channel-telemetry .rec-state { font-size: 12px; overflow-wrap: anywhere; }
+.channel-telemetry .capture-error { color: #ffb5a5; }
+#dashboard-channels.pilot-monitor .channel-viewport .channel-preview { max-height: none; }
