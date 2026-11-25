@@ -1,0 +1,19 @@
+# Agente local / banco / gravacoes
+__pycache__/
+*.py[cod]
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+IngestControl/
+gravacoes/
+logs/
+# Executaveis de ferramentas de teste
+tools/mediamtx/
+# Segredos e arquivos de teste
+.env
+.env.*
+!*.env.example
+*.mp4
+*.mov
+*.mxf
+*.ts
