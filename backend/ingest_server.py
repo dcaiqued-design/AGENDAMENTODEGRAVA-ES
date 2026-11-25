@@ -112,6 +112,8 @@ class Engine:
                 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, begins_at);
                 CREATE INDEX IF NOT EXISTS idx_recordings_source ON recordings(source_id, started_at);
             """)
+            if "calendar_event_id" not in [r[1] for r in db.execute("PRAGMA table_info(jobs)")]:
+                db.execute("ALTER TABLE jobs ADD COLUMN calendar_event_id TEXT")
             # O processo não pode ser recuperado automaticamente depois de reiniciar o agente.
             db.execute("UPDATE recordings SET status='interrupted', ended_at=?, error='Agente reiniciado durante a gravação.' WHERE status='recording'", (stamp(),))
             db.execute("UPDATE jobs SET status='interrupted' WHERE status='running'")
@@ -156,6 +158,12 @@ class Engine:
         name = str(data.get("name", "")).strip()[:100]
         url = str(data.get("url", "")).strip()
         protocol = str(data.get("protocol", "")).lower()
+        if data.get("reuse_source_id"):
+            with connection() as db:
+                previous = db.execute("SELECT url FROM sources WHERE id=?", (data["reuse_source_id"],)).fetchone()
+            if not previous:
+                raise ValueError("Fonte anterior indisponível.")
+            url = previous["url"]
         if not name:
             raise ValueError("Informe um nome para o sinal.")
         if protocol not in ("rtmp", "rtmps", "srt"):
@@ -216,9 +224,9 @@ class Engine:
                 if begin - timedelta(seconds=pre) < b and end + timedelta(seconds=post) > a:
                     raise ValueError("Já existe uma gravação programada nesse intervalo para o sinal.")
             db.execute("""
-                INSERT INTO jobs(id,source_id,program,begins_at,ends_at,pre_seconds,post_seconds,status,created_at)
-                VALUES (?,?,?,?,?,?,?,'scheduled',?)
-            """, (job_id,source_id,program,begin_iso,end_iso,pre,post,stamp()))
+                INSERT INTO jobs(id,source_id,program,begins_at,ends_at,pre_seconds,post_seconds,status,created_at,calendar_event_id)
+                VALUES (?,?,?,?,?,?,?,'scheduled',?,?)
+            """, (job_id,source_id,program,begin_iso,end_iso,pre,post,stamp(),data.get("calendar_event_id")))
         return {"id":job_id,"status":"scheduled"}
 
     def cancel_job(self, job_id):
