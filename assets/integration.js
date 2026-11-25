@@ -292,11 +292,58 @@ $('invite-form').onsubmit=async e=>{
  events.push(created);picker.add(new Option(created.summary,created.id));picker.value=created.id;form.reset();fillReservation(created);
  }catch(err){message.textContent=err.message;}finally{button.disabled=false;}
 };
+const insightMarkup = new WeakMap();
+function updateInsight(panel, markup) {
+ if (insightMarkup.get(panel) === markup) return;
+ insightMarkup.set(panel, markup);
+ panel.innerHTML = markup;
+}
+function renderDashboardInsights() {
+ const activity = $('dashboard-activity');
+ const queue = $('dashboard-queue');
+ if (!online) {
+  for (const panel of [activity, queue]) updateInsight(panel, '<p class="insight-empty">Aguardando o agente local.</p>');
+  return;
+ }
+
+ const weekday = new Intl.DateTimeFormat('pt-BR', {weekday:'short'});
+ const days = Array.from({length:7}, (_, index) => {
+  const day = new Date();
+  day.setDate(day.getDate() + index - 6);
+  return {date:localDate(day), label:weekday.format(day), completed:0, failed:0};
+ });
+ const byDate = new Map(days.map(day => [day.date, day]));
+ for (const entry of history) {
+  const day = byDate.get(localDate(new Date(entry.started_at)));
+  if (!day) continue;
+  if (entry.status === 'completed') day.completed++;
+  if (['failed','interrupted'].includes(entry.status)) day.failed++;
+ }
+ const peak = Math.max(1, ...days.map(day => day.completed + day.failed));
+ updateInsight(activity, '<div class="activity-chart">' + days.map(day => {
+  const total = day.completed + day.failed;
+  return `<button class="activity-day" type="button" onclick="view('recordings')" aria-label="${day.date}: ${day.completed} concluídas, ${day.failed} com falha ou interrompidas">
+   <span class="activity-track" aria-hidden="true"><span class="activity-segment complete" style="height:${day.completed / peak * 100}%"></span><span class="activity-segment failed" style="height:${day.failed / peak * 100}%"></span></span>
+   <strong>${total}</strong><small>${safe(day.label)}</small></button>`;
+ }).join('') + '</div><div class="activity-legend"><span>Concluídas</span><span>Falhas e interrupções</span></div>');
+
+ const scheduled = records.map((job,index) => ({job,index}))
+  .filter(({job}) => job.status === 'scheduled')
+  .sort((a,b) => Date.parse(a.job.begins_at) - Date.parse(b.job.begins_at));
+ const dateLabel = new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'});
+ const today = localDate(new Date());
+ const todayCount = scheduled.filter(({job}) => job.date === today).length;
+ const share = scheduled.length ? todayCount / scheduled.length * 100 : 0;
+ const agendaChart = scheduled.length ? `<button class="queue-summary" type="button" onclick="view('list')"><span>Hoje <strong>${todayCount}</strong></span><span>Outras datas <strong>${scheduled.length - todayCount}</strong></span><span class="queue-track" aria-hidden="true"><span style="width:${share}%"></span></span></button>` : '';
+ updateInsight(queue, scheduled.length ? agendaChart + scheduled.slice(0,4).map(({job,index}) =>
+  `<button class="dashboard-job" type="button" onclick="view('list');details(${index})"><span><strong>${safe(job.program)}</strong><small>${safe(job.source_name)}</small></span><time>${safe(dateLabel.format(new Date(job.begins_at)))}</time></button>`).join('')
+  : `<p class="insight-empty">Nenhuma gravação na fila.</p><button class="btn" onclick="view('agenda')">Programar gravação</button>`);
+}
 const oldRender=render;render=()=>{
  const button=document.activeElement;
  const key=button?.dataset.capture;
  const page=button?.closest('.page');
- oldRender();status();updateClocks();
+ oldRender();status();renderDashboardInsights();updateClocks();
  if(key!==undefined)page?.querySelector('[data-capture="'+key+'"]')?.focus({preventScroll:true});
 };
 render();refresh();setInterval(refresh,2500);setInterval(updateClocks,1000);
