@@ -40,10 +40,10 @@
     <button class="btn primary" onclick="view('agenda')">+ Programar gravação</button>
   </div>
   <div class="stats overview-summary" aria-label="Resumo da operação">
-    <button class="stat" onclick="view('signals')"><span>Sinais vinculados</span><strong class="stat-number">4</strong></button>
-    <button class="stat" onclick="view('recordings')"><span>Gravando agora</span><strong class="stat-number" id="stat-rec">2</strong></button>
-    <button class="stat" onclick="view('list')"><span>Na fila</span><strong class="stat-number" id="stat-agenda">0</strong></button>
-    <button class="stat" onclick="view('files')"><span>Espaço livre</span><strong class="stat-number">—</strong></button>
+    <button class="stat overview-sources" onclick="view('signals')"><span>Sinais vinculados</span><strong class="stat-number">4</strong></button>
+    <button class="stat overview-recordings" onclick="view('recordings')"><span>Gravando agora</span><strong class="stat-number" id="stat-rec">2</strong></button>
+    <button class="stat overview-agenda" onclick="view('list')"><span>Na fila</span><strong class="stat-number" id="stat-agenda">0</strong></button>
+    <button class="stat overview-storage" onclick="view('files')"><span>Espaço livre</span><strong class="stat-number">—</strong></button>
   </div>
 </div>
 <article class="card ingest-monitor"><div class="box-head"><h2><svg aria-hidden="true" class="section-icon" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24" width="20"><path d="M12 20v-8m-4 8h8m-4-8 5-8M12 12 7 4m-1 9a6 6 0 0 1 0-8m12 0a6 6 0 0 1 0 8"></path></svg>Sinais de ingest</h2><div class="pill-row"><button class="filter on" data-filter="all" onclick="setFilter('all')">Todos (4)</button><button class="filter" data-filter="rec" onclick="setFilter('rec')">Gravando</button><button class="filter" data-filter="idle" onclick="setFilter('idle')">Standby</button><button class="filter" data-filter="alert" onclick="setFilter('alert')">Com alerta</button></div></div><div class="ingest-toolbar" role="group" aria-label="Comandos de gravação">
@@ -53,13 +53,13 @@
 </div>
 <div class="channel-grid" id="dashboard-channels"></div></article>
 <div class="dashboard-insights">
-  <article class="card insight-card">
-    <div class="box-head"><h2>Atenção na operação</h2></div>
-    <div id="dashboard-attention" class="insight-body"><p class="insight-empty">Disponível na operação local.</p></div>
-  </article>
-  <article class="card insight-card">
+  <article class="card insight-card schedule-insight">
     <div class="box-head"><h2>Próximas gravações</h2><button class="text-link" onclick="view('list')">Ver programação ›</button></div>
     <div id="dashboard-queue" class="insight-body"><p class="insight-empty">Disponível na operação local.</p></div>
+  </article>
+  <article class="card insight-card attention-insight">
+    <div class="box-head"><h2>Atenção na operação</h2></div>
+    <div id="dashboard-attention" class="insight-body"><p class="insight-empty">Disponível na operação local.</p></div>
   </article>
 </div>
 </section>
