@@ -31,12 +31,11 @@ function status(){
  const canStop=online&&pilotSlots.some(active);
  for(const button of document.querySelectorAll('[onclick="chooseRecord()"],[onclick="recordAll()"]'))button.disabled=pending||!canRecord;
  for(const button of document.querySelectorAll('[onclick="stopAll()"]'))button.disabled=pending||!canStop;
- document.querySelector('.system-list').textContent=online?'API online · '+(health.ffmpeg?'FFmpeg disponível':'FFmpeg ausente'):'API indisponível';
+ document.querySelector('[data-filter="all"]').textContent='Todos ('+pilotSlots.length+')';
+ document.querySelector('[data-filter="idle"]').textContent='Standby ('+pilotSlots.filter(slot=>!recording[slot]).length+')';
  const stats=document.querySelectorAll('.stats .stat');
- stats[0].querySelector('.stat-number').textContent=online?pilotSlots.filter(source).length:'—';stats[0].querySelector('.stat-sub').textContent='Fontes vinculadas ao agente';
- stats[1].querySelector('.stat-sub').textContent=online?'Processos informados pelo agente':'Estado desconhecido';
- stats[2].querySelector('.stat-sub').textContent='Banco do agente local';
- stats[3].querySelector('.stat-number').textContent=online&&health.disk_free_bytes!=null?(health.disk_free_bytes/1024**3).toFixed(1)+' GB':'—';stats[3].querySelector('.stat-sub').textContent=online?'Espaço livre no computador':'Agente indisponível';
+ stats[0].querySelector('.stat-number').textContent=online?pilotSlots.filter(source).length:'—';
+ stats[3].querySelector('.stat-number').textContent=online&&health.disk_free_bytes!=null?(health.disk_free_bytes/1024**3).toFixed(1)+' GB':'—';
  $('stat-rec').textContent=online?history.filter(r=>r.status==='recording').length:'—';
  $('stat-agenda').textContent=online?records.filter(r=>r.status==='scheduled').length:'—';
  $('local-history-count').textContent=online?history.length:'—';
@@ -111,7 +110,6 @@ const recordingRow=r=>`<tr><td><b>${safe(r.title)}</b><small>${safe(r.source_nam
 renderRecent=()=>{
  const headers=['Gravação','Início','Tempo decorrido','Estado','Arquivo'];
  const empty=online?'Nenhuma gravação no agente.':'Agente local indisponível.';
- $('recent-recordings').innerHTML=table(headers,history.slice(0,6).map(recordingRow).join(''),empty);
  const running=history.filter(r=>r.status==='recording'),finished=history.filter(r=>r.status!=='recording');
  $('all-recordings').innerHTML=(running.length?'<h3>Gravando agora</h3>'+table(headers,running.map(recordingRow).join(''),empty):'')+'<h3>Sessões encerradas</h3>'+table(headers,finished.map(recordingRow).join(''),empty);
  const files=history.filter(r=>r.file_size_bytes>0).map(r=>`<tr>
@@ -153,7 +151,6 @@ settings.querySelectorAll('.status-row').forEach(row => row.remove());
 settings.querySelector('.note-text').textContent = 'Na primeira vez, execute ATUALIZAR_E_ABRIR_INGEST.bat. Depois, use o atalho Ingest Control na área de trabalho. Finalize as gravações e feche o agente antes de atualizar.';
 $('page-recordings').querySelector('button').textContent='● Gravar agora';
 $('page-recordings').querySelector('.box-head').textContent='Histórico do agente';
-document.querySelector('.recents-subtitle').textContent='Últimas sessões registradas pelo agente local.';
 $('page-reports').querySelectorAll('.status-tile')[1].innerHTML='<span class="note-text">GRAVAÇÕES NO AGENTE</span><div class="value" id="local-history-count">—</div>';
 $('page-reports').querySelectorAll('.status-tile')[2].innerHTML='<span class="note-text">FALHAS REGISTRADAS</span><div class="value" id="local-error-count">—</div>';
 $('page-reports').querySelector('.badge').textContent='Banco do agente';
@@ -192,6 +189,7 @@ const signalGrid = $('signals-channels');
 signalGrid.closest('.card').querySelector('.badge').remove();
 const signalCards = [];
 const dashboardCards = [];
+$('dashboard-channels').classList.add('pilot-monitor');
 $('dashboard-channels').replaceChildren();
 signalGrid.replaceChildren();
 
@@ -217,7 +215,7 @@ window.renderLocalSignalCards = function () {
   const signal = source(slot);
   const path = signal?.preview_path;
   const player = card.querySelector('.channel-preview');
-  const visible=page==='signals'||filter==='all'||filter==='rec'&&recording[slot]||filter==='idle'&&!recording[slot]||filter==='alert'&&channelAlert[slot];
+  const visible=page==='signals'||pilotSlots.includes(slot)&&(filter==='all'||filter==='rec'&&recording[slot]||filter==='idle'&&!recording[slot]||filter==='alert'&&channelAlert[slot]);
   card.style.display=visible?'':'none';
   const showPreview = visible && currentPage === page && online && ['live/test', 'live/teste', 'live/stream'].includes(path);
   if (!showPreview || (player && player.dataset.path !== path)) player?.remove();
