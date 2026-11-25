@@ -146,8 +146,8 @@ class Engine:
             for row in rows:
                 source = dict(row)
                 address = source.pop("url")
-                # Only the two public paths of the local MediaMTX pilot are browser-visible.
-                for path in ("live/test", "live/teste"):
+                # Only the public paths of the local MediaMTX pilot are browser-visible.
+                for path in ("live/test", "live/teste", "live/stream"):
                     if address == f"rtmp://127.0.0.1:1935/{path}":
                         source["preview_path"] = path
                         break

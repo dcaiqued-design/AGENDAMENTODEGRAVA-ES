@@ -219,7 +219,7 @@ window.renderLocalSignalCards = function () {
   const player = card.querySelector('.channel-preview');
   const visible=page==='signals'||filter==='all'||filter==='rec'&&recording[slot]||filter==='idle'&&!recording[slot]||filter==='alert'&&channelAlert[slot];
   card.style.display=visible?'':'none';
-  const showPreview = visible && currentPage === page && online && ['live/test', 'live/teste'].includes(path);
+  const showPreview = visible && currentPage === page && online && ['live/test', 'live/teste', 'live/stream'].includes(path);
   if (!showPreview || (player && player.dataset.path !== path)) player?.remove();
   card.classList.toggle('has-preview', showPreview);
   if (!showPreview) continue;
