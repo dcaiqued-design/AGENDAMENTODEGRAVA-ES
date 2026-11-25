@@ -43,7 +43,16 @@ function status(){
  $('local-error-count').textContent=online?history.filter(r=>['failed','interrupted'].includes(r.status)).length:'—';
  $('schedule-form').querySelector('button[type="submit"]').disabled=pending||!online||!pilotSlots.some(source);
  const input=$('input-device');
- for(const option of input.options)option.disabled=!source(Number(option.value.slice(-1))-1);
+ for (const option of input.options) {
+  const signal = source(Number(option.value.slice(-1)) - 1);
+  option.disabled = !signal;
+  option.textContent = signal ? option.value + ' · ' + signal.name : option.value + ' · sem fonte';
+ }
+ for (const button of document.querySelectorAll('[data-config-slot]')) {
+  const slot = Number(button.dataset.configSlot);
+  button.disabled = !online || pending;
+  button.textContent = 'Canal ' + (slot + 1) + ' · ' + (source(slot)?.name || 'Vincular fonte');
+ }
  if(!input.selectedOptions[0]||input.selectedOptions[0].disabled){
   input.selectedIndex=Array.from(input.options).findIndex(option=>!option.disabled);
  }
@@ -79,9 +88,9 @@ const table=(columns,rows,empty)=>`<div class="table-wrap"><table class="data-ta
 const download=r=>r.downloadable?`<a class="btn small" href="/api/recordings/${encodeURIComponent(r.id)}/file" download>Baixar MP4</a>`:'—';
 const recordingRow=r=>`<tr><td><b>${safe(r.title)}</b><small>${safe(r.source_name)}</small></td>
  <td>${safe(new Date(r.started_at).toLocaleString('pt-BR'))}</td><td>${clock(r)}</td>
- <td>${safe(label[r.status]||r.status)}<small>${safe(r.error||'')}</small></td></tr>`;
+ <td>${safe(label[r.status]||r.status)}<small>${safe(r.error||'')}</small></td><td>${download(r)}</td></tr>`;
 renderRecent=()=>{
- const headers=['Gravação','Início','Tempo decorrido','Estado'];
+ const headers=['Gravação','Início','Tempo decorrido','Estado','Arquivo'];
  const empty=online?'Nenhuma gravação no agente.':'Agente local indisponível.';
  $('recent-recordings').innerHTML=table(headers,history.slice(0,6).map(recordingRow).join(''),empty);
  $('all-recordings').innerHTML=table(headers,history.map(recordingRow).join(''),empty);
@@ -107,8 +116,21 @@ const descriptions={
  reports:'Indicadores do banco de dados local.',
 };
 for(const [id,description] of Object.entries(descriptions))$('page-'+id).querySelector('.page-head p').textContent=description;
-$('page-settings').querySelectorAll('.status-row').forEach(n=>n.textContent='Configuração de fontes pelo botão ⚙ de cada canal.');
-$('page-settings').querySelector('.note-text').textContent='URLs guardadas no SQLite local. O serviço aceita somente conexões deste computador.';
+const settings = $('page-settings');
+const shortcut = settings.querySelector('button[onclick*="signals"]');
+const sourceControls = shortcut.parentElement;
+shortcut.remove();
+for (const slot of pilotSlots) {
+ const button = document.createElement('button');
+ button.type = 'button';
+ button.className = 'btn';
+ button.dataset.configSlot = slot;
+ button.onclick = () => channelDetails(slot);
+ sourceControls.append(button);
+}
+settings.querySelector('.card h2:last-of-type').textContent = 'Atualizações no Windows';
+settings.querySelectorAll('.status-row').forEach(row => row.remove());
+settings.querySelector('.note-text').textContent = 'Na primeira vez, execute ATUALIZAR_E_ABRIR_INGEST.bat. Depois, use o atalho Ingest Control na área de trabalho. Finalize as gravações e feche o agente antes de atualizar.';
 $('page-recordings').querySelector('button').textContent='● Gravar agora';
 $('page-recordings').querySelector('.box-head').textContent='Histórico do agente';
 document.querySelector('.recents-subtitle').textContent='Últimas sessões registradas pelo agente local.';
