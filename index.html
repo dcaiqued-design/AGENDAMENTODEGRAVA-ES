@@ -33,12 +33,18 @@
 <header class="topbar"><div class="heading-brand"><strong>Ingest Control</strong><small>Controle de gravação</small></div><div class="top-actions"><div class="search-wrap"><span aria-hidden="true"><svg aria-hidden="true" class="i-svg" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24" width="20"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 5 5"></path></svg></span><input aria-label="Busca" id="global-search" placeholder="Buscar programa, sinal ou arquivo..."/></div><button class="icon-btn" onclick="showNotice()" title="Avisos da operação"><svg aria-hidden="true" class="i-svg" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24" width="20"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg></button><button aria-label="Alternar tema entre Canal Rural, Claro e Escuro" class="icon-btn" onclick="cycleTheme()" title="Alternar tema"><svg aria-hidden="true" class="i-svg" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24" width="20"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg></button><div class="avatar" title="Perfil de demonstração">CR</div></div></header>
 <div class="content">
 <div class="demo-notice"><span class="mode-description">Prévia interativa · sinais, REC e agenda simulados.</span><span class="version-note">v0.7</span></div>
-<section class="page" id="page-dashboard"><div class="dashboard-intro"><div><div class="eyebrow"><span class="blue-dot"></span> CENTRAL DE OPERAÇÕES <span class="intro-sep">/</span> INGEST</div><h1>Visão geral</h1></div><div class="intro-right"><span class="intro-date" id="dash-today">23 NOV 2026</span><button class="btn primary intro-cta" onclick="view('agenda')">+ Programar gravação</button></div></div>
-<div class="stats">
-<article class="card stat"><div class="stat-ico"><svg aria-hidden="true" class="i-svg" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24" width="20"><rect height="14" rx="3" width="14" x="3" y="5"></rect><path d="m17 10 4-3v10l-4-3"></path></svg></div><div><div class="stat-number">4</div><div class="stat-label">Sinais vinculados</div></div><button class="stat-link" type="button" onclick="view('signals')" aria-label="Abrir Sinais"><span aria-hidden="true">›</span></button></article>
-<article class="card stat"><div class="stat-ico rec"><svg aria-hidden="true" class="i-svg" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24" width="20"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" fill="currentColor" r="4" stroke="none"></circle></svg></div><div><div class="stat-number" id="stat-rec">2</div><div class="stat-label">Gravando agora</div></div><button class="stat-link" type="button" onclick="view('recordings')" aria-label="Abrir Gravações"><span aria-hidden="true">›</span></button></article>
-<article class="card stat"><div class="stat-ico"><svg aria-hidden="true" class="i-svg" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24" width="20"><rect height="16" rx="2" width="18" x="3" y="5"></rect><path d="M16 3v4M8 3v4M3 10h18m6 5 2 2 4-4"></path></svg></div><div><div class="stat-number" id="stat-agenda">0</div><div class="stat-label">Na fila</div></div><button class="stat-link" type="button" onclick="view('list')" aria-label="Abrir Agendamentos"><span aria-hidden="true">›</span></button></article>
-<article class="card stat"><div class="stat-ico"><svg aria-hidden="true" class="i-svg" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24" width="20"><rect height="12" rx="2" width="18" x="3" y="6"></rect><path d="M3 12h18m-5 3h.01m-4 0h.01"></path></svg></div><div><div class="stat-number">—</div><div class="stat-label">Espaço livre</div></div><button class="stat-link" type="button" onclick="view('files')" aria-label="Abrir Arquivos"><span aria-hidden="true">›</span></button></article>
+<section class="page" id="page-dashboard">
+<div class="card overview-header">
+  <div class="overview-heading">
+    <div><h1>Visão geral</h1><time class="intro-date" id="dash-today"></time></div>
+    <button class="btn primary" onclick="view('agenda')">+ Programar gravação</button>
+  </div>
+  <div class="stats overview-summary" aria-label="Resumo da operação">
+    <button class="stat" onclick="view('signals')"><span>Sinais vinculados</span><strong class="stat-number">4</strong></button>
+    <button class="stat" onclick="view('recordings')"><span>Gravando agora</span><strong class="stat-number" id="stat-rec">2</strong></button>
+    <button class="stat" onclick="view('list')"><span>Na fila</span><strong class="stat-number" id="stat-agenda">0</strong></button>
+    <button class="stat" onclick="view('files')"><span>Espaço livre</span><strong class="stat-number">—</strong></button>
+  </div>
 </div>
 <article class="card ingest-monitor"><div class="box-head"><h2><svg aria-hidden="true" class="section-icon" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24" width="20"><path d="M12 20v-8m-4 8h8m-4-8 5-8M12 12 7 4m-1 9a6 6 0 0 1 0-8m12 0a6 6 0 0 1 0 8"></path></svg>Sinais de ingest</h2><div class="pill-row"><button class="filter on" data-filter="all" onclick="setFilter('all')">Todos (4)</button><button class="filter" data-filter="rec" onclick="setFilter('rec')">Gravando</button><button class="filter" data-filter="idle" onclick="setFilter('idle')">Standby</button><button class="filter" data-filter="alert" onclick="setFilter('alert')">Com alerta</button></div></div><div class="ingest-toolbar" role="group" aria-label="Comandos de gravação">
 <button class="btn danger" onclick="chooseRecord()"><span aria-hidden="true">●</span> Gravar agora</button>
@@ -48,11 +54,11 @@
 <div class="channel-grid" id="dashboard-channels"></div></article>
 <div class="dashboard-insights">
   <article class="card insight-card">
-    <div class="box-head"><div><h2>Atividade de gravação</h2><small>Últimos 7 dias</small></div><button class="text-link" onclick="view('recordings')">Abrir gravações ›</button></div>
-    <div id="dashboard-activity" class="insight-body"><p class="insight-empty">Disponível na operação local.</p></div>
+    <div class="box-head"><h2>Atenção na operação</h2></div>
+    <div id="dashboard-attention" class="insight-body"><p class="insight-empty">Disponível na operação local.</p></div>
   </article>
   <article class="card insight-card">
-    <div class="box-head"><div><h2>Próximas gravações</h2></div><button class="text-link" onclick="view('list')">Abrir agenda ›</button></div>
+    <div class="box-head"><h2>Próximas gravações</h2><button class="text-link" onclick="view('list')">Ver programação ›</button></div>
     <div id="dashboard-queue" class="insight-body"><p class="insight-empty">Disponível na operação local.</p></div>
   </article>
 </div>
